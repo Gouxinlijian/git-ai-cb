@@ -16,6 +16,18 @@ import time
 import hashlib
 from datetime import datetime, timezone
 
+# 版本号：优先读取同目录的 VERSION 文件，缺失时回退到内置默认值。
+__version__ = "0.1.0"
+try:
+    _version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+    if os.path.isfile(_version_file):
+        with open(_version_file, "r", encoding="utf-8") as _f:
+            _v = _f.read().strip()
+            if _v:
+                __version__ = _v
+except Exception:
+    pass
+
 # CodeBuddy 中「文件编辑类」工具名（大小写不敏感）。
 # 其余工具（Bash/Read/Grep/Glob/task 等）一律不记录，避免噪声。
 FILE_EDIT_TOOLS = {

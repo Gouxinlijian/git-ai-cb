@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# git-ai-cb 主命令。
+#
+# 安装后位于 ~/.local/bin/git-ai-cb，是唯一的本地入口。
+# 除了「安装」用 curl | bash 外，其余操作都用本命令：
+#
+#   git-ai-cb -v | --version | version    查看版本
+#   git-ai-cb status                       查看安装状态
+#   git-ai-cb install                      重新安装（幂等）
+#   git-ai-cb update                       更新到最新
+#   git-ai-cb uninstall                    卸载
+#   git-ai-cb help                         帮助
+set -o nounset
+
+INSTALL_DIR="$HOME/.git-ai-cb"
+VERSION_FILE="$INSTALL_DIR/VERSION"
+
+CMD="${1:-help}"
+
+# 读取已安装版本
+version() {
+  if [ -f "$VERSION_FILE" ]; then
+    tr -d '[:space:]' < "$VERSION_FILE"
+  else
+    echo "unknown"
+  fi
+}
+
+print_version() {
+  echo "git-ai-cb $(version)"
+}
+
+print_help() {
+  cat <<'EOF'
+git-ai-cb —— CodeBuddy AI 编码补录钩子
+
+用法:
+  git-ai-cb -v | --version | version   查看版本
+  git-ai-cb status                     查看安装状态
+  git-ai-cb install                    安装 / 重新安装（幂等）
+  git-ai-cb update                     更新到最新版本
+  git-ai-cb uninstall                  卸载
+  git-ai-cb help                       显示本帮助
+
+安装（仅此一步用 curl）:
+  curl -fsSL https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install.sh | bash
+EOF
+}
+
+# 在 INSTALL_DIR 下运行某个脚本（兜底：不存在时提示用 curl 重新安装）
+run_script() {
+  local name="$1"
+  local script="$INSTALL_DIR/$name"
+  if [ ! -f "$script" ]; then
+    echo "错误：未找到 $script。" >&2
+    echo "请先安装：curl -fsSL https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install.sh | bash" >&2
+    return 1
+  fi
+  bash "$script"
+}
+
+case "$CMD" in
+  -v|--version|version)
+    print_version
+    ;;
+  -h|--help|help|"")
+    print_help
+    ;;
+  status)
+    run_script "status.sh"
+    ;;
+  install)
+    run_script "install.sh"
+    ;;
+  update)
+    run_script "update.sh"
+    ;;
+  uninstall)
+    run_script "uninstall.sh"
+    ;;
+  *)
+    echo "未知子命令: $CMD" >&2
+    echo "" >&2
+    print_help
+    exit 1
+    ;;
+esac

@@ -19,42 +19,70 @@
 
 ```
 git-ai-cb/
+├── git-ai-cb        # 主命令（安装后为 ~/.local/bin/git-ai-cb）
 ├── hook.py          # 核心逻辑（解析 stdin、判定、写记录）——install 后 CodeBuddy 直接调用它
 ├── hook.sh          # Git Bash 薄封装入口（可选：手动调用时用）
-├── install.sh       # 安装：追加 hook 到 ~/.codebuddy/settings.json（幂等）
+├── install.sh       # 安装（Unix / Linux / macOS / Git Bash）
+├── install.ps1      # 安装（Windows PowerShell，自动定位 bash）
 ├── uninstall.sh     # 卸载：移除本工具的 hook 条目
-├── update.sh        # 更新：git pull 后重新安装
+├── update.sh        # 更新：拉最新后重新安装
+├── status.sh        # 状态：查看版本、是否已安装、python 依赖
+├── VERSION          # 版本号（如 0.1.0）
 └── README.md
 ```
 
-## 安装
+## 版本
+
+版本号定义在仓库根目录的 `VERSION` 文件（当前 `0.1.0`）。
+`hook.py` 会读取该文件作为 `__version__`，主命令及各脚本也会读取它用于展示。
+升级时只需修改 `VERSION`。
+
+## 安装（唯一一步用命令，跨平台）
+
+### Windows（PowerShell / PowerShell Core）
+
+```powershell
+irm https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install.ps1 | iex
+```
+
+`install.ps1` 会自动定位 Git Bash 的 `bash.exe`（多路径 + 从 git 逆向推导 + 注册表兜底），
+无需手动把 bash 加进 PATH。
+
+### Linux / macOS / Git Bash
 
 ```bash
-# 1. 克隆（使用你自己的 SSH 配置）
-git clone git@github.com:Gouxinlijian/git-ai-cb.git
-cd git-ai-cb
-
-# 2. 安装（会写入 ~/.codebuddy/settings.json）
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install.sh | bash
 ```
+
+脚本会：
+1. 把 `hook.py` 等文件下载到 `~/.git-ai-cb/`；
+2. 把主命令 `git-ai-cb` 安装到 `~/.local/bin/`；
+3. 将 hook 注册进 `~/.codebuddy/settings.json`。
+
+> 若 `~/.local/bin` 不在 PATH 中，请先执行：
+> `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc` 并重开终端。
 
 重启 CodeBuddy 后生效。
 
-## 更新
+## 日常命令（安装后，无需再 curl）
 
 ```bash
-cd git-ai-cb
-bash update.sh          # 拉最新 + 重新安装
-# 或指定版本
-bash update.sh v1.2.0
+git-ai-cb -v                 # 查看版本
+git-ai-cb status            # 查看安装状态（版本 / python / 落盘 / 是否注册）
+git-ai-cb install           # 重新安装（幂等）
+git-ai-cb update            # 更新到最新
+git-ai-cb uninstall         # 卸载
+git-ai-cb help              # 帮助
 ```
 
 ## 卸载
 
 ```bash
-cd git-ai-cb
-bash uninstall.sh
+git-ai-cb uninstall
 ```
+
+卸载只移除本工具注册的 hook 条目；如想彻底清理，可再删除 `~/.git-ai-cb/` 目录
+和 `~/.local/bin/git-ai-cb`。
 
 ## 工作原理
 

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # git-ai-cb 卸载脚本：只移除本工具注册的 hook 条目，绝不改动其他 hook（如 vibeinsight）。
+# 用法：
+#   bash uninstall.sh
+#   curl -fsSL <raw>/uninstall.sh | bash
 set -o nounset
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 卸载只需要 settings.json 路径 + python，与 hook.py 落盘位置无关，
+# 因此直接用 python 操作 settings.json，不再依赖脚本所在目录。
 CB_DIR="$HOME/.codebuddy"
 SETTINGS_FILE="$CB_DIR/settings.json"
 
@@ -33,6 +37,9 @@ settings_file = sys.argv[1]
 with open(settings_file, "r", encoding="utf-8") as f:
     data = json.loads(f.read())
 
+if not isinstance(data, dict):
+    data = {}
+
 hooks = data.get("hooks", {})
 removed = []
 
@@ -55,18 +62,15 @@ for evt in list(hooks.keys()):
             continue
         cmd = e.get("command") or ""
         sub = e.get("hooks")
-        # 顶层 command 命中，或嵌套 hooks 里的 command 命中
         top_is_ours = is_ours(cmd)
         if isinstance(sub, list):
             sub_kept = [s for s in sub if not (isinstance(s, dict) and is_ours(s.get("command") or ""))]
             if len(sub_kept) != len(sub):
                 e["hooks"] = sub_kept
                 changed = True
-                # 子项全被删除，且顶层无自己的 command → 整条丢弃
                 if len(sub_kept) == 0 and not top_is_ours:
                     continue
         if top_is_ours and (not sub or len(sub) == 0):
-            # 本条是全匹配本工具 → 丢弃
             changed = True
             continue
         kept.append(e)
@@ -91,4 +95,5 @@ else:
     print("未找到本工具注册的 hook，可能已卸载。")
 
 print("卸载完成。重启 CodeBuddy 后生效。")
+print("提示：如需彻底清理，可删除 ~/.git-ai-cb/ 目录。")
 PYEOF

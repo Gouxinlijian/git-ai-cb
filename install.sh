@@ -1,25 +1,48 @@
 #!/usr/bin/env bash
 # git-ai-cb 安装脚本：把 hook 注册进 ~/.codebuddy/settings.json。
 #
+# 支持两种调用方式：
+#   1) 克隆后本地执行：  bash install.sh
+#   2) 远程一键安装：    curl -fsSL <raw>/install.sh | bash
+#      （自动下载 hook.py 等文件到固定目录 ~/.git-ai-cb/）
+#
 # 特性：
 #   - 仅「追加」我们的 hook，绝不删除/修改已有的 hook（如 vibeinsight）。
 #   - 幂等：重复执行不会重复添加。
-#   - 无 python 也能执行（注册本身不依赖 python，hook 运行时才需要）。
+#   - 无 python 也能执行注册（注册本身不依赖 python，hook 运行时才需要）。
 set -o nounset
 
-# 定位本仓库目录（install.sh 就在仓库根目录）
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 固定安装目录（远程安装时 hook 等文件落盘于此，与克隆路径解耦）
+INSTALL_DIR="$HOME/.git-ai-cb"
+
+# 远程仓库 raw 基础地址（远程安装下载用；仓库内脚本用 SCRIPT_DIR 即可）
+GIT_REMOTE="https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main"
+
+# 需要落盘的文件清单（远程下载用）
+FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh VERSION git-ai-cb"
+
+# 定位「真正的仓库目录」与「运行时 hook 目录」：
+#   - 本地 clone：SCRIPT_DIR 即仓库根，hook.py 就在旁边；
+#   - 远程安装：脚本通过管道执行，SCRIPT_DIR 无意义，改用 INSTALL_DIR。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${0}}")" 2>/dev/null && pwd)"
+
+# 判断旁边是否已有 hook.py（本地 clone 场景）
+if [ -f "$SCRIPT_DIR/hook.py" ]; then
+  RUNTIME_DIR="$SCRIPT_DIR"
+elif [ -f "$INSTALL_DIR/hook.py" ]; then
+  RUNTIME_DIR="$INSTALL_DIR"
+else
+  RUNTIME_DIR="$INSTALL_DIR"
+fi
 
 # CodeBuddy 全局配置
 CB_DIR="$HOME/.codebuddy"
 SETTINGS_FILE="$CB_DIR/settings.json"
 
 # 唯一标识：用 hook 脚本路径作为我们条目的指纹（防止重复注册）
-# 这里用 hook.py 作为指纹（安装/卸载都用它识别本工具的条目）
-HOOK_SCRIPT="$REPO_DIR/hook.py"
+HOOK_SCRIPT="$RUNTIME_DIR/hook.py"
 
 # 解析 python 解释器（Windows 下 python3 可能是 Store stub，优先 python）。
-# 同时拿到它的绝对路径，写入 hook command，避免运行时 PATH 差异。
 PY=""
 if command -v python >/dev/null 2>&1; then
   PY="$(command -v python)"
@@ -32,8 +55,74 @@ else
   exit 1
 fi
 
+echo "== git-ai-cb 安装 =="
+
+# 远程自举：若旁边没有 hook.py（非 clone 场景），则从远程下载整套文件到 INSTALL_DIR
+if [ ! -f "$HOOK_SCRIPT" ]; then
+  echo "下载脚本到 $INSTALL_DIR ..."
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "错误：远程安装需要 curl，但未找到。" >&2
+    exit 1
+  fi
+  mkdir -p "$INSTALL_DIR"
+  for f in $FILES; do
+    if curl -fsSL "$GIT_REMOTE/$f" -o "$INSTALL_DIR/$f"; then
+      :
+    else
+      echo "  下载失败(忽略): $f"
+    fi
+  done
+  if [ ! -f "$INSTALL_DIR/hook.py" ]; then
+    echo "错误：hook.py 下载失败，无法安装。" >&2
+    exit 1
+  fi
+  RUNTIME_DIR="$INSTALL_DIR"
+  HOOK_SCRIPT="$RUNTIME_DIR/hook.py"
+fi
+
+# 同步核心文件到 INSTALL_DIR（clone 场景也同步，保证主命令可用）
+if [ "$RUNTIME_DIR" != "$INSTALL_DIR" ]; then
+  mkdir -p "$INSTALL_DIR"
+  for f in $FILES; do
+    if [ -f "$RUNTIME_DIR/$f" ]; then
+      cp "$RUNTIME_DIR/$f" "$INSTALL_DIR/$f"
+    fi
+  done
+fi
+
+# 安装主命令到 ~/.local/bin
+LOCAL_BIN="$HOME/.local/bin"
+MAIN_CMD="$INSTALL_DIR/git-ai-cb"
+if [ -f "$MAIN_CMD" ]; then
+  mkdir -p "$LOCAL_BIN"
+  cp "$MAIN_CMD" "$LOCAL_BIN/git-ai-cb"
+  chmod +x "$LOCAL_BIN/git-ai-cb" 2>/dev/null || true
+  echo "主命令   : $LOCAL_BIN/git-ai-cb"
+  # 提示 PATH（若未包含 ~/.local/bin）
+  case ":$PATH:" in
+    *":$LOCAL_BIN:"*) ;;
+    *) echo "提示     : 请确保 $LOCAL_BIN 在 PATH 中（可 echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc）" ;;
+  esac
+else
+  echo "警告     : 未找到主命令 git-ai-cb，跳过命令安装"
+fi
+
+# 读取版本号（优先 INSTALL_DIR/VERSION）
+VERSION=""
+if [ -f "$INSTALL_DIR/VERSION" ]; then
+  VERSION="$(tr -d '[:space:]' < "$INSTALL_DIR/VERSION")"
+fi
+[ -z "$VERSION" ] && VERSION="unknown"
+
+echo "版本     : $VERSION"
+echo "配置文件 : $SETTINGS_FILE"
+
+if [ ! -d "$CB_DIR" ]; then
+  echo "创建目录 $CB_DIR"
+  mkdir -p "$CB_DIR"
+fi
+
 # 转成 Windows 绝对路径（cygpath -w 在 Git Bash 下可用），确保 CodeBuddy 在任意 shell 下都能调用。
-# 若 cygpath 不可用（纯 Linux/macOS），原样使用。
 if command -v cygpath >/dev/null 2>&1; then
   PY_WIN="$(cygpath -w "$PY")"
   HOOK_PY_WIN="$(cygpath -w "$HOOK_SCRIPT")"
@@ -43,20 +132,10 @@ else
 fi
 
 # hook command：用 python 绝对路径直接调用 hook.py。
-# Python 脚本内部已用 sys.stdin.buffer.read() + utf-8-sig 处理 stdin，无编码问题。
 HOOK_COMMAND="\"$PY_WIN\" \"$HOOK_PY_WIN\""
 
 # matcher：文件编辑类工具（CodeBuddy 工具名）
 MATCHER="^(Edit|Write|NotebookEdit|MultiEdit)$"
-
-echo "== git-ai-cb 安装 =="
-echo "仓库目录 : $REPO_DIR"
-echo "配置文件 : $SETTINGS_FILE"
-
-if [ ! -d "$CB_DIR" ]; then
-  echo "创建目录 $CB_DIR"
-  mkdir -p "$CB_DIR"
-fi
 
 # 用 python 做 JSON 的安全读写（避免 shell 拼 JSON 出错）
 "$PY" - "$SETTINGS_FILE" "$HOOK_SCRIPT" "$HOOK_COMMAND" "$MATCHER" <<'PYEOF'
@@ -96,7 +175,6 @@ registered = []
 def is_ours(cmd):
     if not cmd:
         return False
-    # 统一分隔符后判断，兼容 Windows 反斜杠与 Git Bash 正斜杠
     norm = cmd.replace("\\", "/")
     return ("git-ai-cb" in norm) and ("hook" in norm)
 
@@ -112,7 +190,6 @@ def already_registered(evt):
             cmd = e.get("command")
             if cmd and is_ours(cmd):
                 return True
-            # 也检查嵌套 hooks 结构（有些版本的 settings 结构不同）
             sub = e.get("hooks")
             if isinstance(sub, list):
                 for s in sub:
@@ -127,8 +204,6 @@ def already_registered(evt):
     return False
 
 # 追加条目：兼容两种结构
-#  结构A（新版）：hooks.PreToolUse = [ { "matcher": "...", "hooks": [ {"type":"command","command":"..."} ] } ]
-#  结构B（旧版/简版）：hooks.PreToolUse = [ { "matcher":"...", "command":"..." } ]
 def add_entry(evt):
     if already_registered(evt):
         return False
@@ -143,7 +218,6 @@ def add_entry(evt):
             {"type": "command", "command": hook_command}
         ],
     }
-    # 判断现有条目用的结构，保持一致
     use_flat = True
     if isinstance(entries, list):
         for e in entries:
