@@ -1,0 +1,34 @@
+.idea/.gitignore
+  h_2e840e662f85ac 1-8
+.idea/inspectionProfiles/Project_Default.xml
+  h_2e840e662f85ac 1-5
+README.md
+  h_2e840e662f85ac 22,25-26,28-30,34,36-42,44-45,48-64,67,70-75,81,84-86
+VERSION
+  h_2e840e662f85ac 1
+git-ai-cb
+  h_2e840e662f85ac 1-87
+hook.py
+  h_2e840e662f85ac 19-30
+install.ps1
+  h_2e840e662f85ac 1-80
+install.sh
+  h_2e840e662f85ac 4-8,12,15-36,43,58-124
+status.sh
+  h_2e840e662f85ac 1-108
+uninstall.sh
+  h_2e840e662f85ac 3-5,8-9,40-42,98
+update.sh
+  h_2e840e662f85ac 2-6,9-12,16-18,20,23-37,39-56,59,61,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "10ba375137393a082cd691a862b3e948c9dc9710",
+  "prompts": {},
+  "humans": {
+    "h_2e840e662f85ac": {
+      "author": "Jett_Li <haitao.l@foxmail.com>"
+    }
+  }
+}
