@@ -2,38 +2,61 @@
 
 独立、可下载安装的 **CodeBuddy AI 编码补录钩子**。
 
-它不改造 [git-ai](https://github.com/git-ai-project/git-ai) 原版，与其**完全隔离**。作用只有一个：
-**当 git-ai 没有捕获到编码工具时**（例如你用的是 CodeBuddy，而非 git-ai 支持的 agent），
-补写一条记录，标明「这段代码由 `codebuddy` + 某个模型编写」。
+它不改造 [git-ai](https://github.com/git-ai-project/git-ai) 原版代码，与其**完全隔离**。作用只有一个：
+**当 CodeBuddy 产生文件编辑时，把编辑事件转成 git-ai 能识别的 checkpoint，喂给 git-ai，
+使 `git-ai stats` 能把这些编辑统计为 AI 行数。**
 
-## 设计原则
+## 核心思路
 
-- **只在 git-ai 未捕获时介入**：检查仓库 `.git/ai/` 下是否存在 git-ai 原生产物
-  （`working_logs` / `authorship_log` / `notes` 等）。存在 → 本工具什么都不做。
-- **绝不写脏 git-ai 的任何文件**：记录写到独立文件 `.git/ai/codebuddy-ai.log`，
-  git-ai 原版不读取、不认识该文件，互不干扰。
-- **卸载干净**：只移除本工具自己注册的 hook 条目，不动你已有的其他 hook
-  （如 `vibeinsight`）。
+git-ai 自带多个「agent preset」（`claude`、`cursor`、`codex` 等），但没有 CodeBuddy preset。
+本工具借用一个现成 preset 的入口，把 CodeBuddy 的编辑事件翻译成该 preset 的 hook 输入，
+再调用 `git-ai checkpoint <preset> --hook-input stdin`，让 git-ai 自己写 working_log。
+
+选用的 preset 是 **`claude`**，模型名取自 CodeBuddy hook 输入的 `model` 字段
+（如 `custom-local:deepseek-v4-pro` → `deepseek-v4-pro`），最终在 `git-ai stats` 中显示为
+`claude::deepseek-v4-pro`。
+
+> 为什么是 `claude`：git-ai 所有 preset 的工具名都硬编码（无 `codebuddy`），
+> 不改源码的前提下，`claude` 是接口最贴合 CodeBuddy 结构的一个。tool 名用的是
+> `claude`，但**模型名是真实的**，不会误报。
+
+## 数据流
+
+```
+CodeBuddy 工具（Edit / Write / MultiEdit / NotebookEdit）
+    │  PostToolUse hook（hook.py）
+    ▼
+hook.py 解析 stdin，生成临时 Claude JSONL（含真实模型名）
+    │
+    ▼
+git-ai checkpoint claude --hook-input stdin
+    │  （写入 git-ai 自己的 working_logs/<base_commit>/checkpoints.jsonl）
+    ▼
+git 提交 → git-ai 的 post-commit hook 把 working_log 转成 git note（refs/notes/ai）
+    │
+    ▼
+git-ai stats / git-ai log / git-ai blame 显示 AI 行数
+```
 
 ## 目录结构
 
 ```
 git-ai-cb/
 ├── git-ai-cb        # 主命令（安装后为 ~/.local/bin/git-ai-cb）
-├── hook.py          # 核心逻辑（解析 stdin、判定、写记录）——install 后 CodeBuddy 直接调用它
+├── hook.py          # 核心逻辑（解析 stdin、转换并调用 git-ai checkpoint）——install 后 CodeBuddy 直接调用它
 ├── hook.sh          # Git Bash 薄封装入口（可选：手动调用时用）
 ├── install.sh       # 安装（Unix / Linux / macOS / Git Bash）
 ├── install.ps1      # 安装（Windows PowerShell，自动定位 bash）
 ├── uninstall.sh     # 卸载：移除本工具的 hook 条目
 ├── update.sh        # 更新：拉最新后重新安装
 ├── status.sh        # 状态：查看版本、是否已安装、python 依赖
-├── VERSION          # 版本号（如 0.1.0）
+├── VERSION          # 版本号（如 0.2.0）
 └── README.md
 ```
 
 ## 版本
 
-版本号定义在仓库根目录的 `VERSION` 文件（当前 `0.1.0`）。
+版本号定义在仓库根目录的 `VERSION` 文件（当前 `0.2.0`）。
 `hook.py` 会读取该文件作为 `__version__`，主命令及各脚本也会读取它用于展示。
 升级时只需修改 `VERSION`。
 
@@ -61,6 +84,9 @@ curl -fsSL https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install
 
 > 若 `~/.local/bin` 不在 PATH 中，请先执行：
 > `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc` 并重开终端。
+
+> 前置依赖：git-ai 已安装且 `git-ai` 命令在 PATH 中。若 git-ai 未安装，
+> hook 会静默不生效（不阻塞 CodeBuddy）。
 
 重启 CodeBuddy 后生效。
 
@@ -92,34 +118,32 @@ git-ai-cb uninstall
 ## 工作原理
 
 1. CodeBuddy 触发文件编辑类工具（`Edit` / `Write` / `NotebookEdit` / `MultiEdit`）时，
-   hook 收到 stdin JSON（含 `cwd`、`transcript_path`、`tool_name`、`session_id` 等）。
+   hook 收到 stdin JSON（含 `cwd`、`session_id`、`tool_name`、`tool_input.file_path`、`model` 等）。
 2. `hook.py` 解析后：
    - 只处理**文件编辑类**工具，忽略 `Bash`/`Read`/`Grep`/`Glob` 等；
-   - 定位 `.git` 目录，若不在 git 仓库则忽略；
-   - 检查 `.git/ai/` 是否已有 git-ai 记录 → **有则跳过**；
-   - 否则从 transcript（Claude JSONL）解析模型名，写入一条记录。
+   - 定位 `.git` 目录（优先用被编辑文件路径），若不在 git 仓库则忽略；
+   - 从 `model` 字段提取真实模型名（`custom-local:deepseek-v4-pro` → `deepseek-v4-pro`）；
+   - 生成一个临时 Claude JSONL（`{"message":{"model":"<模型>"}}`），
+     因为 git-ai 的 `claude` preset 只从 `transcript_path` 指向的 JSONL 解析模型；
+   - 用 `git-ai checkpoint claude --hook-input stdin` 提交 checkpoint。
+3. git-ai 把 checkpoint 写进自己的 working_log，提交时由它自带的 post-commit hook
+   转成 git note，`git-ai stats` 即可看到 `claude::deepseek-v4-pro` 的 AI 行数。
 
-## 记录格式
+## 验证
 
-写入 `.git/ai/codebuddy-ai.log`，每行一条 JSON：
+安装并完成一次 CodeBuddy 编辑、`git commit` 后：
 
-```json
-{
-  "agent": "codebuddy",
-  "model": "deepseek-v4.1-flash",
-  "tool": "Edit",
-  "event": "PostToolUse",
-  "session_id": "76a3b900a5ed4f4cb24ac9de145dcade",
-  "cwd": "/path/to/repo",
-  "files": ["/path/to/repo/src/foo.ts"],
-  "timestamp": "2026-09-18T02:00:00+00:00"
-}
+```bash
+git-ai stats            # 应看到 AI 占比（tool_model_breakdown 里有 claude::<模型>）
+git-ai stats --json     # 查看结构化结果，确认 tool_model_breakdown
+git-ai log              # 查看各提交的 AI 行数占比
 ```
 
 ## 前置依赖
 
 - `bash`（Windows 用 Git Bash）
-- `python3`（或 `python`），用于 JSON 解析与记录写入
+- `python`（或 `python3`），用于 JSON 解析与记录写入
+- `git-ai`（已安装、`git-ai` 命令在 PATH 中）
 
 ## 调试
 
@@ -133,5 +157,5 @@ export GIT_AI_CB_DEBUG=1
 
 - 本工具只对 **CodeBuddy** 有效（通过 CodeBuddy 的 `settings.json` hook 机制注入），
   其他 AI 工具继续使用 git-ai 原版，不受任何影响。
-- 「补录」是**轻量可读记录**，不追求复刻 git-ai 的 hash 归因体系（`authorship/3.0.0`），
-  因此 git-ai 自身的 `git-ai` 命令不会读取这些记录——这正是「互不影响」的体现。
+- 本工具**不写 git-ai 的任何私有文件**，只调用 git-ai 公开的 `checkpoint` 命令，
+  由 git-ai 自己负责 working_log 与 git note 的写入与归档，互不干扰、可随 git-ai 升级平滑兼容。
