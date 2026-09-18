@@ -19,7 +19,7 @@ INSTALL_DIR="$HOME/.git-ai-cb"
 GIT_REMOTE="https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main"
 
 # 需要落盘的文件清单（远程下载用）
-FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh VERSION git-ai-cb"
+FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh VERSION git-ai-cb git-ai-cb.cmd"
 
 # 定位「真正的仓库目录」与「运行时 hook 目录」：
 #   - 本地 clone：SCRIPT_DIR 即仓库根，hook.py 就在旁边；
@@ -90,11 +90,17 @@ fi
 # 安装主命令到 ~/.local/bin
 LOCAL_BIN="$HOME/.local/bin"
 MAIN_CMD="$INSTALL_DIR/git-ai-cb"
+MAIN_CMD_CMD="$INSTALL_DIR/git-ai-cb.cmd"
 if [ -f "$MAIN_CMD" ]; then
   mkdir -p "$LOCAL_BIN"
   cp "$MAIN_CMD" "$LOCAL_BIN/git-ai-cb"
   chmod +x "$LOCAL_BIN/git-ai-cb" 2>/dev/null || true
   echo "主命令   : $LOCAL_BIN/git-ai-cb"
+  # Windows 下同时装 .cmd 包装，让 PowerShell / cmd 也能直接敲 git-ai-cb
+  if [ -f "$MAIN_CMD_CMD" ]; then
+    cp "$MAIN_CMD_CMD" "$LOCAL_BIN/git-ai-cb.cmd"
+    echo "CMD 包装 : $LOCAL_BIN/git-ai-cb.cmd"
+  fi
   # 提示 PATH（若未包含 ~/.local/bin）
   case ":$PATH:" in
     *":$LOCAL_BIN:"*) ;;

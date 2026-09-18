@@ -9,7 +9,7 @@ set -o nounset
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${0}}")" 2>/dev/null && pwd)"
 INSTALL_DIR="$HOME/.git-ai-cb"
 GIT_REMOTE="https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main"
-FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh VERSION git-ai-cb"
+FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh VERSION git-ai-cb git-ai-cb.cmd"
 
 echo "== git-ai-cb 更新 =="
 

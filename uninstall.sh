@@ -97,3 +97,12 @@ else:
 print("卸载完成。重启 CodeBuddy 后生效。")
 print("提示：如需彻底清理，可删除 ~/.git-ai-cb/ 目录。")
 PYEOF
+
+# 删除 ~/.local/bin 下的主命令（bash 脚本 + Windows .cmd 包装）
+LOCAL_BIN="$HOME/.local/bin"
+for f in "git-ai-cb" "git-ai-cb.cmd"; do
+  if [ -f "$LOCAL_BIN/$f" ]; then
+    rm -f "$LOCAL_BIN/$f"
+    echo "已删除命令: $LOCAL_BIN/$f"
+  fi
+done

@@ -66,6 +66,8 @@ curl -fsSL https://raw.githubusercontent.com/Gouxinlijian/git-ai-cb/main/install
 
 ## 日常命令（安装后，无需再 curl）
 
+Git Bash、Linux、macOS 与 Windows PowerShell / cmd 下均可直接调用：
+
 ```bash
 git-ai-cb -v                 # 查看版本
 git-ai-cb status            # 查看安装状态（版本 / python / 落盘 / 是否注册）
@@ -74,6 +76,9 @@ git-ai-cb update            # 更新到最新
 git-ai-cb uninstall         # 卸载
 git-ai-cb help              # 帮助
 ```
+
+> Windows 下：安装会同时写入 `~/.local/bin/git-ai-cb`（bash 脚本，供 Git Bash 用）
+> 和 `~/.local/bin/git-ai-cb.cmd`（CMD 包装，供 PowerShell / cmd 用），确保两种 shell 都能识别。
 
 ## 卸载
 
