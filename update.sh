@@ -13,6 +13,28 @@ FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh V
 
 echo "== git-ai-cb 更新 =="
 
+# 读取本地已安装版本
+local_version() {
+  if [ -f "$INSTALL_DIR/VERSION" ]; then
+    tr -d '[:space:]' < "$INSTALL_DIR/VERSION"
+  else
+    echo ""
+  fi
+}
+
+LOCAL_VER="$(local_version)"
+
+# 获取远程最新版本号（仅取 VERSION 文件，轻量）
+remote_version() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$GIT_REMOTE/VERSION" 2>/dev/null | tr -d '[:space:]'
+  else
+    echo ""
+  fi
+}
+
+REMOTE_VER="$(remote_version)"
+
 # 判断运行上下文
 if [ -d "$SCRIPT_DIR/.git" ]; then
   # 克隆目录：git pull + 可选切换 ref
@@ -25,6 +47,26 @@ if [ -d "$SCRIPT_DIR/.git" ]; then
     echo "切换到: $ref"
     git -C "$SCRIPT_DIR" checkout "$ref" 2>/dev/null || echo "警告：无法切换到 $ref"
   fi
+  # 读取 clone 目录里的最新版本（git pull 之后）
+  if [ -f "$SCRIPT_DIR/VERSION" ]; then
+    REMOTE_VER="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
+  fi
+fi
+
+# 版本检测：本地与远程/最新版本一致时跳过覆盖更新
+if [ -n "$LOCAL_VER" ] && [ -n "$REMOTE_VER" ] && [ "$LOCAL_VER" = "$REMOTE_VER" ]; then
+  echo "当前已是最新版本 $LOCAL_VER，无需更新。"
+  exit 0
+fi
+
+if [ -n "$LOCAL_VER" ] && [ -n "$REMOTE_VER" ]; then
+  echo "发现新版本：$LOCAL_VER -> $REMOTE_VER"
+elif [ -z "$LOCAL_VER" ]; then
+  echo "本地未安装，将安装版本 $REMOTE_VER"
+fi
+
+# 判断运行上下文继续更新
+if [ -d "$SCRIPT_DIR/.git" ]; then
   # 同步本地 clone 内容到安装目录
   if [ -f "$SCRIPT_DIR/hook.py" ]; then
     mkdir -p "$INSTALL_DIR"
