@@ -26,11 +26,12 @@ FILES="hook.py hook.sh install.sh install.ps1 uninstall.sh update.sh status.sh V
 #   - 远程安装：脚本通过管道执行，SCRIPT_DIR 无意义，改用 INSTALL_DIR。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${0}}")" 2>/dev/null && pwd)"
 
-# 判断旁边是否已有 hook.py（本地 clone 场景）
+# 是否「clone 本地执行」：脚本同目录下存在 hook.py 即视为 clone 场景。
+# 否则视为远程（管道执行），一律从远程下载最新文件，保证自举升级。
+IS_LOCAL="no"
 if [ -f "$SCRIPT_DIR/hook.py" ]; then
+  IS_LOCAL="yes"
   RUNTIME_DIR="$SCRIPT_DIR"
-elif [ -f "$INSTALL_DIR/hook.py" ]; then
-  RUNTIME_DIR="$INSTALL_DIR"
 else
   RUNTIME_DIR="$INSTALL_DIR"
 fi
@@ -57,19 +58,17 @@ fi
 
 echo "== git-ai-cb 安装 =="
 
-# 远程自举：若旁边没有 hook.py（非 clone 场景），则从远程下载整套文件到 INSTALL_DIR
-if [ ! -f "$HOOK_SCRIPT" ]; then
-  echo "下载脚本到 $INSTALL_DIR ..."
+# 远程场景（非 clone）：始终从远程下载整套最新文件到 INSTALL_DIR，保证自举升级。
+if [ "$IS_LOCAL" != "yes" ]; then
+  echo "下载最新脚本到 $INSTALL_DIR ..."
   if ! command -v curl >/dev/null 2>&1; then
     echo "错误：远程安装需要 curl，但未找到。" >&2
     exit 1
   fi
   mkdir -p "$INSTALL_DIR"
   for f in $FILES; do
-    if curl -fsSL "$GIT_REMOTE/$f" -o "$INSTALL_DIR/$f"; then
-      :
-    else
-      echo "  下载失败(忽略): $f"
+    if ! curl -fsSL "$GIT_REMOTE/$f" -o "$INSTALL_DIR/$f"; then
+      echo "  下载失败: $f" >&2
     fi
   done
   if [ ! -f "$INSTALL_DIR/hook.py" ]; then
@@ -78,10 +77,8 @@ if [ ! -f "$HOOK_SCRIPT" ]; then
   fi
   RUNTIME_DIR="$INSTALL_DIR"
   HOOK_SCRIPT="$RUNTIME_DIR/hook.py"
-fi
-
-# 同步核心文件到 INSTALL_DIR（clone 场景也同步，保证主命令可用）
-if [ "$RUNTIME_DIR" != "$INSTALL_DIR" ]; then
+else
+  # clone 本地场景：同步核心文件到 INSTALL_DIR（保证主命令可用）
   mkdir -p "$INSTALL_DIR"
   for f in $FILES; do
     if [ -f "$RUNTIME_DIR/$f" ]; then
