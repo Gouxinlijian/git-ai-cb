@@ -1,0 +1,22 @@
+README.md
+  h_2e840e662f85ac 69-70,80-82
+git-ai-cb.cmd
+  h_2e840e662f85ac 1-45
+install.sh
+  h_2e840e662f85ac 22,93,99-103
+uninstall.sh
+  h_2e840e662f85ac 100-108
+update.sh
+  h_2e840e662f85ac 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "23269f4f1bf0d8b6a4d7ca709e29e9fac3592b3f",
+  "prompts": {},
+  "humans": {
+    "h_2e840e662f85ac": {
+      "author": "Jett_Li <haitao.l@foxmail.com>"
+    }
+  }
+}
