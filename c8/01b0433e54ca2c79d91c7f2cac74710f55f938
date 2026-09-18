@@ -1,0 +1,14 @@
+install.sh
+  h_2e840e662f85ac 29-31,33,61-63,70-71,80-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "c801b0433e54ca2c79d91c7f2cac74710f55f938",
+  "prompts": {},
+  "humans": {
+    "h_2e840e662f85ac": {
+      "author": "Jett_Li <haitao.l@foxmail.com>"
+    }
+  }
+}
